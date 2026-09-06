@@ -1,39 +1,39 @@
-FROM node:19 as build
+ARG TARGETPLATFORM
+
+FROM --platform=$TARGETPLATFORM node:20-slim AS build
 
 WORKDIR /app
 
-ADD package.json /app
-ADD package-lock.json /app
+COPY package.json package-lock.json ./
+RUN npm ci
 
-RUN npm install
-
-COPY src /app/src
-ADD tsconfig.json /app
+COPY src ./src
+COPY tsconfig.json ./
 
 RUN npx tsc
 
-FROM node:19
+FROM --platform=$TARGETPLATFORM node:20-slim
 
-RUN apt update && \
-    apt install -y android-tools-adb && \
-    apt-get clean
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends android-tools-adb && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-ADD package.json /app
-ADD package-lock.json /app
-
+COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
-COPY bin /app/bin
-COPY resources /app/resources
-COPY --from=build /app/dist /app/dist
+COPY bin ./bin
+COPY resources ./resources
+COPY --from=build /app/dist ./dist
 
-RUN ln -s /app/bin/nxapi-znca-api.js /usr/local/bin/nxapi-znca-api
+RUN chmod +x /app/bin/nxapi-znca-api.js /app/resources/docker-entrypoint.sh && \
+    ln -s /app/bin/nxapi-znca-api.js /usr/local/bin/nxapi-znca-api
+
 ENV NXAPI_DATA_PATH=/data
 ENV NODE_ENV=production
 
-RUN ln -s /data/android /root/.android
+RUN mkdir -p /data && ln -s /data/android /root/.android
 
 VOLUME [ "/data" ]
 
