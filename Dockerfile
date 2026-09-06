@@ -1,24 +1,24 @@
 ARG TARGETPLATFORM
 
-# --- Étape 1 : Build TypeScript ---
+# --- Étape 1 : Build TypeScript & Dépendances ---
 FROM --platform=$TARGETPLATFORM node:20-slim AS build
 
 WORKDIR /app
 
-# Installation des dépendances C++/Python requises pour compiler les modules ARM64
+# Outils de compilation natifs requis pour ARM64
 RUN apt-get update && \
     apt-get install -y --no-install-recommends python3 make g++ && \
     rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json* ./
-
-# Utilisation de npm install pour éviter le blocage strict du lockfile
 RUN npm install
 
 COPY src ./src
 COPY tsconfig.json ./
-
 RUN npx tsc
+
+# Suppression des dépendances de dev après la compilation TypeScript
+RUN npm prune --omit=dev
 
 # --- Étape 2 : Image d'exécution (Runtime) ---
 FROM --platform=$TARGETPLATFORM node:20-slim
@@ -29,11 +29,12 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-COPY package.json package-lock.json* ./
-RUN npm install --omit=dev
-
+COPY package.json ./
 COPY bin ./bin
 COPY resources ./resources
+
+# Copie des modules compilés et du code JS généré depuis l'étape build
+COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 
 RUN chmod +x /app/bin/nxapi-znca-api.js /app/resources/docker-entrypoint.sh && \
