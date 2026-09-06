@@ -1,32 +1,27 @@
 ARG TARGETPLATFORM
 
-# --- Étape 1 : Build TypeScript & Dépendances ---
-FROM --platform=$TARGETPLATFORM node:20-slim AS build
+# --- Étape 1 : Build sous l'image Node complète (Out-of-the-box C++/Python/Git) ---
+FROM --platform=$TARGETPLATFORM node:20 AS build
 
 WORKDIR /app
 
-# Ajout de git, ca-certificates et des outils de compilation natifs
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends python3 make g++ git ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
+COPY package.json ./
 
-COPY package.json package-lock.json* ./
-
-# Installation permissive pour éviter les blocages de peer-dependencies
+# Suppression du lockfile x86 et installation propre des dépendances ARM64
 RUN npm install --legacy-peer-deps
 
 COPY src ./src
 COPY tsconfig.json ./
 RUN npx tsc
 
-# Nettoyage des packages dev pour alléger le dossier final
+# Nettoyage des packages dev pour la prod
 RUN npm prune --omit=dev --legacy-peer-deps
 
-# --- Étape 2 : Image d'exécution (Runtime ARM64) ---
+# --- Étape 2 : Image d'exécution légère ---
 FROM --platform=$TARGETPLATFORM node:20-slim
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends android-tools-adb && \
+    apt-get install -y --no-install-recommends android-tools-adb ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
