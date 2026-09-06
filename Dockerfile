@@ -1,17 +1,26 @@
 ARG TARGETPLATFORM
 
+# --- Étape 1 : Build TypeScript ---
 FROM --platform=$TARGETPLATFORM node:20-slim AS build
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
-RUN npm ci
+# Installation des dépendances C++/Python requises pour compiler les modules ARM64
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends python3 make g++ && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY package.json package-lock.json* ./
+
+# Utilisation de npm install pour éviter le blocage strict du lockfile
+RUN npm install
 
 COPY src ./src
 COPY tsconfig.json ./
 
 RUN npx tsc
 
+# --- Étape 2 : Image d'exécution (Runtime) ---
 FROM --platform=$TARGETPLATFORM node:20-slim
 
 RUN apt-get update && \
@@ -20,8 +29,8 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+COPY package.json package-lock.json* ./
+RUN npm install --omit=dev
 
 COPY bin ./bin
 COPY resources ./resources
