@@ -2,8 +2,8 @@ version: '3'
 
 services:
   znca-api:
-    # build: .
-    image: samuelthomas2774/nxapi-znca-api
+    build: .
+    # image: samuelthomas2774/nxapi-znca-api
     command:
       - android-frida-server
       - redroid
