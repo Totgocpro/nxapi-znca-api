@@ -5,22 +5,24 @@ FROM --platform=$TARGETPLATFORM node:20-slim AS build
 
 WORKDIR /app
 
-# Outils de compilation natifs requis pour ARM64
+# Ajout de git, ca-certificates et des outils de compilation natifs
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends python3 make g++ && \
+    apt-get install -y --no-install-recommends python3 make g++ git ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json* ./
-RUN npm install
+
+# Installation permissive pour éviter les blocages de peer-dependencies
+RUN npm install --legacy-peer-deps
 
 COPY src ./src
 COPY tsconfig.json ./
 RUN npx tsc
 
-# Suppression des dépendances de dev après la compilation TypeScript
-RUN npm prune --omit=dev
+# Nettoyage des packages dev pour alléger le dossier final
+RUN npm prune --omit=dev --legacy-peer-deps
 
-# --- Étape 2 : Image d'exécution (Runtime) ---
+# --- Étape 2 : Image d'exécution (Runtime ARM64) ---
 FROM --platform=$TARGETPLATFORM node:20-slim
 
 RUN apt-get update && \
@@ -33,7 +35,6 @@ COPY package.json ./
 COPY bin ./bin
 COPY resources ./resources
 
-# Copie des modules compilés et du code JS généré depuis l'étape build
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 
